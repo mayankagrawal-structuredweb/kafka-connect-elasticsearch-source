@@ -31,7 +31,7 @@
     "username": "dariobalinzo"
   },
   "requirements": [
-    "Elasticsearch >= 6.x"
+    "Elasticsearch >= 6.x (including 9.x)"
   ],
   "support": {
     "logo": "assets/dariobalinzo.png",

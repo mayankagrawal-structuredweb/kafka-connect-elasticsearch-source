@@ -138,7 +138,14 @@ public final class ElasticRepository {
     }
 
     private QueryBuilder buildGreaterThen(String cursorField, String cursorValue) {
-        return rangeQuery(cursorField).from(cursorValue, false);
+        // Use wrapperQuery to ensure ES 9.x compatible syntax with "gt" instead of "from"
+        String es9xCompatibleQuery = String.format(
+            "{\"range\":{\"%s\":{\"gt\":\"%s\"}}}", 
+            cursorField, cursorValue
+        );
+        QueryBuilder query = wrapperQuery(es9xCompatibleQuery);
+        logger.info("Built ES 9.x compatible range query for field '{}' with value '{}': {}", cursorField, cursorValue, es9xCompatibleQuery);
+        return query;
     }
 
     private QueryBuilder getSecondarySortFieldQuery(String primaryCursor, String secondaryCursor) {
@@ -156,6 +163,10 @@ public final class ElasticRepository {
     }
 
     private SearchResponse executeSearch(SearchRequest searchRequest) throws IOException, InterruptedException {
+        // Add detailed logging for debugging
+        logger.info("Executing search request for indices: {}", Arrays.toString(searchRequest.indices()));
+        logger.info("Search query: {}", searchRequest.source().toString());
+        
         int maxTrials = elasticConnection.getMaxConnectionAttempts();
         if (maxTrials <= 0) {
             throw new IllegalArgumentException("MaxConnectionAttempts should be > 0");
@@ -166,6 +177,8 @@ public final class ElasticRepository {
                 return elasticConnection.getClient()
                         .search(searchRequest, RequestOptions.DEFAULT);
             } catch (IOException e) {
+                logger.error("Search request failed (attempt {}/{}): {}", i + 1, maxTrials, e.getMessage());
+                logger.error("Failed query was: {}", searchRequest.source().toString());
                 lastError = e;
                 Thread.sleep(elasticConnection.getConnectionRetryBackoff());
             }

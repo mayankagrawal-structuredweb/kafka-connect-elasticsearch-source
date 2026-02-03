@@ -8,7 +8,7 @@ and nested objects/ arrays.
 
 ## Requirements:
 
-- Elasticsearch 6.x and 7.x
+- Elasticsearch 6.x, 7.x, 8.x, and 9.x
 - Java >= 8
 - Maven
 
