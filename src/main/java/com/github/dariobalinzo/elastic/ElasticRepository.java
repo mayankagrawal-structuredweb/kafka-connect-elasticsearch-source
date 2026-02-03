@@ -33,6 +33,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.github.dariobalinzo.elastic.ElasticJsonNaming.removeKeywordSuffix;
@@ -144,7 +145,6 @@ public final class ElasticRepository {
             cursorField, cursorValue
         );
         QueryBuilder query = wrapperQuery(es9xCompatibleQuery);
-        logger.info("Built ES 9.x compatible range query for field '{}' with value '{}': {}", cursorField, cursorValue, es9xCompatibleQuery);
         return query;
     }
 
@@ -165,7 +165,6 @@ public final class ElasticRepository {
     private SearchResponse executeSearch(SearchRequest searchRequest) throws IOException, InterruptedException {
         // Add detailed logging for debugging
         logger.info("Executing search request for indices: {}", Arrays.toString(searchRequest.indices()));
-        logger.info("Search query: {}", searchRequest.source().toString());
         
         int maxTrials = elasticConnection.getMaxConnectionAttempts();
         if (maxTrials <= 0) {
@@ -186,7 +185,7 @@ public final class ElasticRepository {
         throw lastError;
     }
 
-    public List<String> catIndices(String prefix) {
+    public List<String> catIndices(String prefix, String regex) {
         Response resp;
         try {
             resp = elasticConnection.getClient()
@@ -197,13 +196,40 @@ public final class ElasticRepository {
             throw new RuntimeException(e);
         }
 
+        Pattern pattern = null;
+        boolean useRegex = regex != null && !regex.isEmpty();
+        if (useRegex) {
+            try {
+                pattern = Pattern.compile(regex);
+                logger.info("Using regex pattern for index matching: {}", regex);
+            } catch (Exception e) {
+                logger.error("Invalid regex pattern: {}", regex, e);
+                throw new IllegalArgumentException("Invalid regex pattern: " + regex, e);
+            }
+        } else if (prefix != null && !prefix.isEmpty()) {
+            logger.info("Using prefix for index matching: {}", prefix);
+        }
+
         List<String> result = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(resp.getEntity().getContent()))) {
             String line;
 
             while ((line = reader.readLine()) != null) {
                 String index = line.split("\\s+")[2];
-                if (index.startsWith(prefix)) {
+                boolean matches = false;
+                
+                if (useRegex) {
+                    // Use regex pattern matching if regex is provided
+                    matches = pattern.matcher(index).matches();
+                } else if (prefix != null && !prefix.isEmpty()) {
+                    // Fall back to prefix matching
+                    matches = index.startsWith(prefix);
+                } else {
+                    // If neither regex nor prefix is provided, match all indices
+                    matches = true;
+                }
+                
+                if (matches) {
                     result.add(index);
                 }
             }
@@ -212,6 +238,7 @@ public final class ElasticRepository {
         }
 
         Collections.sort(result);
+        logger.info("Found {} matching indices", result.size());
 
         return result;
     }

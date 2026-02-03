@@ -23,14 +23,16 @@ public class ElasticIndexMonitorThread extends Thread {
   private final long pollMs;
   private final ElasticRepository elasticRepository;
   private final String prefix;
+  private final String regex;
   private List<String> indexes;
   
-  public ElasticIndexMonitorThread(ConnectorContext context, long pollMs, ElasticRepository elasticRepository, String prefix) {
+  public ElasticIndexMonitorThread(ConnectorContext context, long pollMs, ElasticRepository elasticRepository, String prefix, String regex) {
     this.context = context;
     this.shutdownLatch = new CountDownLatch(1);
     this.pollMs = pollMs;
     this.elasticRepository = elasticRepository;
     this.prefix = prefix;
+    this.regex = regex;
     this.indexes = new ArrayList<>();
   }
 
@@ -86,7 +88,7 @@ public class ElasticIndexMonitorThread extends Thread {
   private synchronized boolean updateIndexes() {
     final List<String> indexes;
     try {
-      indexes = elasticRepository.catIndices(this.prefix);
+      indexes = elasticRepository.catIndices(this.prefix, this.regex);
       log.debug("Got the following topics: {}", indexes);
     } catch (RuntimeException e) {
       log.error("Error while trying to get updated topics list, ignoring and waiting for next table poll interval", e);

@@ -71,6 +71,12 @@ public class ElasticSourceTask extends SourceTask {
     private ElasticRepository elasticRepository;
 
     private final List<DocumentFilter> documentFilters = new ArrayList<>();
+    
+    // Heartbeat support
+    private long heartbeatIntervalMs;
+    private String heartbeatTopicPrefix;
+    private String heartbeatTopicName;
+    private long lastHeartbeatMs;
 
     @Override
     public String version() {
@@ -99,6 +105,18 @@ public class ElasticSourceTask extends SourceTask {
         secondaryCursorSearchField = config.getString(ElasticSourceConnectorConfig.SECONDARY_INCREMENTING_FIELD_NAME_CONFIG);
         secondaryCursorField = secondaryCursorSearchField == null ? null : new CursorField(secondaryCursorSearchField);
         pollingMs = Integer.parseInt(config.getString(ElasticSourceConnectorConfig.POLL_INTERVAL_MS_CONFIG));
+
+        // Initialize heartbeat configuration
+        heartbeatIntervalMs = Long.parseLong(config.getString(ElasticSourceConnectorConfig.HEARTBEAT_INTERVAL_MS_CONFIG));
+        heartbeatTopicPrefix = config.getString(ElasticSourceConnectorConfig.TOPIC_HEARTBEAT_PREFIX_CONFIG);
+        heartbeatTopicName = heartbeatTopicPrefix + "." + topic;
+        lastHeartbeatMs = System.currentTimeMillis();
+        
+        if (heartbeatIntervalMs > 0) {
+            logger.info("Heartbeat enabled with interval {} ms, topic: {}", heartbeatIntervalMs, heartbeatTopicName);
+        } else {
+            logger.info("Heartbeat disabled");
+        }
 
         initConnectorFilters();
         initConnectorFieldConverter();
@@ -201,7 +219,6 @@ public class ElasticSourceTask extends SourceTask {
                 if (!stopping.get()) {
                     logger.info("fetching from {}", index);
                     Cursor lastValue = fetchLastOffset(index);
-                    logger.info("found last value {}", lastValue);
                     PageResult pageResult = secondaryCursorSearchField == null ?
                             elasticRepository.searchAfter(index, lastValue) :
                             elasticRepository.searchAfterWithSecondarySort(index, lastValue);
@@ -209,6 +226,16 @@ public class ElasticSourceTask extends SourceTask {
                     logger.info("index {} total messages: {} ", index, sent.get(index));
                 }
             }
+            
+            // Check if we need to send a heartbeat
+            if (shouldSendHeartbeat(results.isEmpty())) {
+                SourceRecord heartbeat = createHeartbeatRecord();
+                if (heartbeat != null) {
+                    results.add(heartbeat);
+                    logger.debug("Added heartbeat message to topic {}", heartbeatTopicName);
+                }
+            }
+            
             if (results.isEmpty()) {
                 logger.info("no data found, sleeping for {} ms", pollingMs);
                 Thread.sleep(pollingMs);
@@ -273,6 +300,71 @@ public class ElasticSourceTask extends SourceTask {
                     struct);
             results.add(sourceRecord);
         }
+    }
+
+    /**
+     * Determines if a heartbeat message should be sent based on the configured interval
+     * and time since last heartbeat.
+     * 
+     * @param noDataFetched true if no data was fetched in the current poll
+     * @return true if a heartbeat should be sent
+     */
+    private boolean shouldSendHeartbeat(boolean noDataFetched) {
+        // Heartbeat is disabled if interval is 0 or less
+        if (heartbeatIntervalMs <= 0) {
+            return false;
+        }
+        
+        long currentTime = System.currentTimeMillis();
+        long timeSinceLastHeartbeat = currentTime - lastHeartbeatMs;
+        
+        // Send heartbeat if interval has elapsed
+        return timeSinceLastHeartbeat >= heartbeatIntervalMs;
+    }
+    
+    /**
+     * Creates a heartbeat SourceRecord message.
+     * The heartbeat message contains the current timestamp and connector information.
+     * 
+     * @return a SourceRecord for the heartbeat, or null if heartbeat is disabled
+     */
+    private SourceRecord createHeartbeatRecord() {
+        if (heartbeatIntervalMs <= 0) {
+            return null;
+        }
+        
+        long currentTime = System.currentTimeMillis();
+        lastHeartbeatMs = currentTime;
+        
+        // Create a simple heartbeat message with timestamp and connector info
+        Map<String, Object> heartbeatValue = new HashMap<>();
+        heartbeatValue.put("timestamp", currentTime);
+        heartbeatValue.put("connector", "elasticsearch-source");
+        heartbeatValue.put("topic_prefix", topic);
+        
+        // Use a simple schema for heartbeat messages
+        Schema heartbeatSchema = org.apache.kafka.connect.data.SchemaBuilder.struct()
+                .name("io.debezium.connector.elasticsearch.Heartbeat")
+                .field("timestamp", Schema.INT64_SCHEMA)
+                .field("connector", Schema.STRING_SCHEMA)
+                .field("topic_prefix", Schema.STRING_SCHEMA)
+                .build();
+        
+        Struct heartbeatStruct = new Struct(heartbeatSchema)
+                .put("timestamp", currentTime)
+                .put("connector", "elasticsearch-source")
+                .put("topic_prefix", topic);
+        
+        // Heartbeat messages don't have source partitions or offsets
+        return new SourceRecord(
+                null,  // source partition
+                null,  // source offset
+                heartbeatTopicName,
+                null,  // key schema
+                null,  // key
+                heartbeatSchema,
+                heartbeatStruct
+        );
     }
 
     //will be called by connect with a different thread than poll thread

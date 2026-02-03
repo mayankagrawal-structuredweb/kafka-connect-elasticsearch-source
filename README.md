@@ -59,6 +59,23 @@ output topics with ``es_`` prefix:
 }
 ```
 
+Alternatively, you can use a regex pattern to match indices:
+
+```json
+{       
+  "name": "elastic-source",
+   "config": {
+             "connector.class":"com.github.dariobalinzo.ElasticSourceConnector",
+             "tasks.max": "1",
+             "es.host" : "localhost",
+             "es.port" : "9200",
+             "index.regex" : "dev-tenant-.*-content-v.*",
+             "topic.prefix" : "es_",
+             "incrementing.field.name" : "@timestamp"
+        }
+}
+```
+
 To start the connector with curl:
 
 ```bash
@@ -180,6 +197,14 @@ Periodically, new indices are discovered if they match the pattern.
 * Default: ""
 * Importance: medium
 
+``index.regex``
+Regex pattern to match indices to include in copying. Takes precedence over `index.prefix` if both are specified.
+For example: `dev-tenant-.*-content-v.*` will match indices like `dev-tenant-customer-content-v1`, `dev-tenant-order-content-v2`, etc.
+
+* Type: string
+* Default: ""
+* Importance: medium
+
 ``index.names``
 List of elasticsearch indices: `es1,es2,es3`
 
@@ -245,3 +270,45 @@ in order to be serialized correctly. To disable the field name conversion set th
 * Type: string
 * Importance: medium
 * Default: avro
+
+### Heartbeat Configuration
+
+``heartbeat.interval.ms``
+Controls how frequently heartbeat messages are sent. This property contains an interval in milliseconds that defines how frequently the connector sends messages into a heartbeat topic. This can be used to monitor whether the connector is still receiving change events from the database. Set this parameter to 0 to not send heartbeat messages at all.
+
+* Type: long
+* Default: 0 (disabled)
+* Importance: low
+
+``topic.heartbeat.prefix``
+Controls the name of the topic to which the connector sends heartbeat messages. The topic name has this pattern: `topic.heartbeat.prefix`.`topic.prefix`. For example, if `topic.heartbeat.prefix` is `__debezium-heartbeat` and `topic.prefix` is `es_`, the heartbeat topic will be `__debezium-heartbeat.es_`.
+
+* Type: string
+* Default: __debezium-heartbeat
+* Importance: low
+
+#### Heartbeat Example
+
+To enable heartbeat messages every 60 seconds:
+
+```json
+{       
+  "name": "elastic-source",
+   "config": {
+             "connector.class":"com.github.dariobalinzo.ElasticSourceConnector",
+             "tasks.max": "1",
+             "es.host" : "localhost",
+             "es.port" : "9200",
+             "index.prefix" : "my_awesome_index",
+             "topic.prefix" : "es_",
+             "incrementing.field.name" : "@timestamp",
+             "heartbeat.interval.ms": "60000",
+             "topic.heartbeat.prefix": "__debezium-heartbeat"
+        }
+}
+```
+
+The heartbeat messages are useful for:
+- Monitoring connector health and activity
+- Preventing offset issues during periods of inactivity
+- Ensuring the connector pipeline is functioning correctly

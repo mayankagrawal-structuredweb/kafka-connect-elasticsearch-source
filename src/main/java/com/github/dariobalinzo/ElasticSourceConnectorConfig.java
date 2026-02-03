@@ -110,6 +110,11 @@ public class ElasticSourceConnectorConfig extends AbstractConfig {
     private static final String INDEX_PREFIX_DEFAULT = "";
     private static final String INDEX_PREFIX_DISPLAY = "Indices prefix Whitelist";
 
+    public static final String INDEX_REGEX_CONFIG = "index.regex";
+    private static final String INDEX_REGEX_DOC = "Regex pattern to match indices to include in copying. Takes precedence over index.prefix if both are specified.";
+    private static final String INDEX_REGEX_DEFAULT = "";
+    private static final String INDEX_REGEX_DISPLAY = "Indices regex pattern";
+
     public static final String INDEX_NAMES_CONFIG = "index.names";
     private static final String INDEX_NAMES_DOC = "List of elasticsearch indices (es1,es2,es3)";
     private static final String INDEX_NAMES_DEFAULT = null;
@@ -149,6 +154,21 @@ public class ElasticSourceConnectorConfig extends AbstractConfig {
 
     public static final String NOP_FIELDNAME_CONVERTER = "nop";
     public static final String AVRO_FIELDNAME_CONVERTER = "avro";
+
+    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
+    private static final String HEARTBEAT_INTERVAL_MS_DOC = 
+            "Controls how frequently heartbeat messages are sent. " +
+            "This property contains an interval in milliseconds that defines how frequently the connector sends messages into a heartbeat topic. " +
+            "Set this parameter to 0 to not send heartbeat messages at all. Disabled by default.";
+    private static final String HEARTBEAT_INTERVAL_MS_DEFAULT = "0";
+    private static final String HEARTBEAT_INTERVAL_MS_DISPLAY = "Heartbeat Interval (ms)";
+
+    public static final String TOPIC_HEARTBEAT_PREFIX_CONFIG = "topic.heartbeat.prefix";
+    private static final String TOPIC_HEARTBEAT_PREFIX_DOC = 
+            "Controls the name of the topic to which the connector sends heartbeat messages. " +
+            "The topic name has this pattern: topic.heartbeat.prefix.topic.prefix";
+    private static final String TOPIC_HEARTBEAT_PREFIX_DEFAULT = "__debezium-heartbeat";
+    private static final String TOPIC_HEARTBEAT_PREFIX_DISPLAY = "Heartbeat Topic Prefix";
 
     public static final ConfigDef CONFIG_DEF = baseConfigDef();
 
@@ -283,6 +303,16 @@ public class ElasticSourceConnectorConfig extends AbstractConfig {
                 Width.LONG,
                 INDEX_PREFIX_DISPLAY
         ).define(
+                INDEX_REGEX_CONFIG,
+                Type.STRING,
+                INDEX_REGEX_DEFAULT,
+                Importance.MEDIUM,
+                INDEX_REGEX_DOC,
+                DATABASE_GROUP,
+                ++orderInGroup,
+                Width.LONG,
+                INDEX_REGEX_DISPLAY
+        ).define(
                 INDEX_NAMES_CONFIG,
                 Type.STRING,
                 INDEX_NAMES_DEFAULT,
@@ -411,6 +441,26 @@ public class ElasticSourceConnectorConfig extends AbstractConfig {
                 ++orderInGroup,
                 Width.MEDIUM,
                 CONNECTOR_FIELDNAME_CONVERTER_DISPLAY
+        ).define(
+                HEARTBEAT_INTERVAL_MS_CONFIG,
+                Type.STRING,
+                HEARTBEAT_INTERVAL_MS_DEFAULT,
+                Importance.LOW,
+                HEARTBEAT_INTERVAL_MS_DOC,
+                CONNECTOR_GROUP,
+                ++orderInGroup,
+                Width.SHORT,
+                HEARTBEAT_INTERVAL_MS_DISPLAY
+        ).define(
+                TOPIC_HEARTBEAT_PREFIX_CONFIG,
+                Type.STRING,
+                TOPIC_HEARTBEAT_PREFIX_DEFAULT,
+                Importance.LOW,
+                TOPIC_HEARTBEAT_PREFIX_DOC,
+                CONNECTOR_GROUP,
+                ++orderInGroup,
+                Width.MEDIUM,
+                TOPIC_HEARTBEAT_PREFIX_DISPLAY
         );
     }
 
