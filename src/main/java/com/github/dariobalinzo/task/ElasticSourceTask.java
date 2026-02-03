@@ -113,9 +113,7 @@ public class ElasticSourceTask extends SourceTask {
         lastHeartbeatMs = System.currentTimeMillis();
         
         if (heartbeatIntervalMs > 0) {
-            logger.info("Heartbeat enabled with interval {} ms, topic: {}", heartbeatIntervalMs, heartbeatTopicName);
-        } else {
-            logger.info("Heartbeat disabled");
+            logger.info("Heartbeat enabled: interval={}ms, topic={}", heartbeatIntervalMs, heartbeatTopicName);
         }
 
         initConnectorFilters();
@@ -232,7 +230,6 @@ public class ElasticSourceTask extends SourceTask {
                 SourceRecord heartbeat = createHeartbeatRecord();
                 if (heartbeat != null) {
                     results.add(heartbeat);
-                    logger.debug("Added heartbeat message to topic {}", heartbeatTopicName);
                 }
             }
             
@@ -335,12 +332,6 @@ public class ElasticSourceTask extends SourceTask {
         
         long currentTime = System.currentTimeMillis();
         lastHeartbeatMs = currentTime;
-        
-        // Create a simple heartbeat message with timestamp and connector info
-        Map<String, Object> heartbeatValue = new HashMap<>();
-        heartbeatValue.put("timestamp", currentTime);
-        heartbeatValue.put("connector", "elasticsearch-source");
-        heartbeatValue.put("topic_prefix", topic);
         
         // Use a simple schema for heartbeat messages
         Schema heartbeatSchema = org.apache.kafka.connect.data.SchemaBuilder.struct()
