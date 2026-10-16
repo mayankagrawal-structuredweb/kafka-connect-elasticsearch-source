@@ -7,3 +7,11 @@
 .factorypath
 .classpath
 .project
+
+.DS_Store
+*.log
+.env
+*.pem
+*.key
+dependency-reduced-pom.xml
+HEARTBEAT_LOGGING_GUIDE.md
